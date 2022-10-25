@@ -39,7 +39,7 @@ void Logger::printLog(logLevel level, char* msg, ...)
 
     std::string time = getCurrentTime();
     std::string logType = levelToString(level);
-    std::string result = time + logType + msg;
+    std::string result = time + logType + msg + "\n";
 
     vfprintf(instance.Log, result.c_str(), args);
     va_end(args);
