@@ -11,5 +11,7 @@ int main(int argc, char**argv)
         return -1;
     }
 
+    int if_index = interface_to_index(argv[1]);
+
     return 0;
 }
