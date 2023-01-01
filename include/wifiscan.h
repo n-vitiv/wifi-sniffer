@@ -16,6 +16,7 @@ public:
 private:
     char intf_name[INTF_SIZE];
 
+    int family_handler(struct nl_msg *msg, void *arg);
     int interface_to_index(char* interface);
     struct nl_sock* open_socket();
     WiFiScan();
