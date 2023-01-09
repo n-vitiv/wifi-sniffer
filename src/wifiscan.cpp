@@ -114,3 +114,51 @@ int WiFiScan::nl_get_multicast_id(struct nl_sock *sock, const char *family, cons
             nlmsg_free(msg);
             return ret;
 }
+
+void  WiFiScan::mac_addr_n2a(char *mac_addr, unsigned char *arg)
+{
+    int i, l;
+    l = 0;
+    for (i = 0; i < 6; i++)
+    {
+        if (i == 0)
+        {
+            sprintf(mac_addr+l, "%02x", arg[i]);
+            l += 2;
+        }
+        else
+        {
+            sprintf(mac_addr+l, ":%02x", arg[i]);
+            l += 3;
+        }
+    }
+}
+
+
+void  WiFiScan::print_ssid(unsigned char *ie, int ielen)
+{
+    uint8_t len;
+    uint8_t *data;
+    int i;
+
+    while (ielen >= 2 && ielen >= ie[1])
+    {
+        if (ie[0] == 0 && ie[1] >= 0 && ie[1] <= 32)
+        {
+            len = ie[1];
+            data = ie + 2;
+            for (i = 0; i < len; i++)
+            {
+                if (isprint(data[i]) && data[i] != ' ' && data[i] != '\\')
+                    printf("%c", data[i]);
+                else if (data[i] == ' ' && (i != 0 && i != len -1))
+                    printf(" ");
+                else
+                    printf("\\x%.2x", data[i]);
+            }
+            break;
+        }
+        ielen -= ie[1] + 2;
+        ie += ie[1] + 2;
+    }
+}
