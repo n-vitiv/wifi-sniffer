@@ -68,3 +68,49 @@ int WiFiScan::family_handler(struct nl_msg *msg, void *arg)
 
     return NL_SKIP;
 }
+
+int WiFiScan::nl_get_multicast_id(struct nl_sock *sock, const char *family, const char *group)
+{
+    struct nl_msg *msg;
+    struct nl_cb *cb;
+    int ret, ctrlid;
+    struct handler_args grp;
+    grp.group = group;
+    grp.id = -ENOENT;
+
+    msg = nlmsg_alloc();
+    if (!msg) return -ENOMEM;
+
+    cb = nl_cb_alloc(NL_CB_DEFAULT);
+    if (!cb) {
+        ret = -ENOMEM;
+        goto out_fail_cb;
+    }
+
+    ctrlid = genl_ctrl_resolve(sock, "nlctrl");
+
+    genlmsg_put(msg, 0, 0, ctrlid, 0, 0, CTRL_CMD_GETFAMILY, 0);
+
+    ret = -ENOBUFS;
+    NLA_PUT_STRING(msg, CTRL_ATTR_FAMILY_NAME, family);
+
+    ret = nl_send_auto_complete(sock, msg);
+    if (ret < 0) goto out;
+
+    ret = 1;
+
+    nl_cb_err(cb, NL_CB_CUSTOM, error_handler, &ret);
+    nl_cb_set(cb, NL_CB_ACK, NL_CB_CUSTOM, ack_handler, &ret);
+    nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, family_handler, &grp);
+
+    while (ret > 0) nl_recvmsgs(sock, cb);
+
+    if (ret == 0) ret = grp.id;
+
+    nla_put_failure:
+        out:
+            nl_cb_put(cb);
+        out_fail_cb:
+            nlmsg_free(msg);
+            return ret;
+}

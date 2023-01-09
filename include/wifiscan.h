@@ -16,8 +16,9 @@ public:
 private:
     char intf_name[INTF_SIZE];
 
-    int family_handler(struct nl_msg *msg, void *arg);
+    static int family_handler(struct nl_msg *msg, void *arg);
     int interface_to_index(char* interface);
+    int nl_get_multicast_id(struct nl_sock *sock, const char *family, const char *group);
     struct nl_sock* open_socket();
     WiFiScan();
 };
