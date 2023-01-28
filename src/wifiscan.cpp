@@ -185,3 +185,50 @@ int WiFiScan::callback_trigger(struct nl_msg *msg, void *arg)
 
     return NL_SKIP;
 }
+
+// Called by the kernel with a dump of the successful scan's data. Called for each SSID.
+int WiFiScan::callback_dump(struct nl_msg *msg, void *arg)
+{
+    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
+    char mac_addr[20];
+    struct nlattr *tb[NL80211_ATTR_MAX + 1];
+    struct nlattr *bss[NL80211_BSS_MAX + 1];
+    static struct nla_policy bss_policy[NL80211_BSS_MAX + 1];
+    bss_policy[NL80211_BSS_TSF].type = NLA_U64;
+    bss_policy[NL80211_BSS_FREQUENCY].type = NLA_U32;
+    bss_policy[NL80211_BSS_BSSID] = {};
+    bss_policy[NL80211_BSS_BEACON_INTERVAL].type = NLA_U16;
+    bss_policy[NL80211_BSS_CAPABILITY].type = NLA_U16;
+    bss_policy[NL80211_BSS_INFORMATION_ELEMENTS] = {};
+    bss_policy[NL80211_BSS_SIGNAL_MBM].type = NLA_U32;
+    bss_policy[NL80211_BSS_SIGNAL_UNSPEC].type = NLA_U8;
+    bss_policy[NL80211_BSS_STATUS].type = NLA_U32;
+    bss_policy[NL80211_BSS_SEEN_MS_AGO].type = NLA_U32;
+    bss_policy[NL80211_BSS_BEACON_IES] = {};
+
+    // Parse and error check.
+    nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
+    if (!tb[NL80211_ATTR_BSS])
+    {
+        printf("bss info missing!\n");
+        return NL_SKIP;
+    }
+    if (nla_parse_nested(bss, NL80211_BSS_MAX, tb[NL80211_ATTR_BSS], bss_policy))
+    {
+        printf("failed to parse nested attributes!\n");
+        return NL_SKIP;
+    }
+    if (!bss[NL80211_BSS_BSSID])
+        return NL_SKIP;
+    if (!bss[NL80211_BSS_INFORMATION_ELEMENTS])
+        return NL_SKIP;
+
+    // Start printing.
+    mac_addr_n2a(mac_addr, (unsigned char*)nla_data(bss[NL80211_BSS_BSSID]));
+    printf("%s, ", mac_addr);
+    printf("%d MHz, ", nla_get_u32(bss[NL80211_BSS_FREQUENCY]));
+    print_ssid((unsigned char*)nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]), nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]));
+    printf("\n");
+
+    return NL_SKIP;
+}

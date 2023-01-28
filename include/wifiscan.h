@@ -24,6 +24,7 @@ private:
     struct nl_sock* open_socket();
     WiFiScan();
     int callback_trigger(struct nl_msg *msg, void *arg);
+    int callback_dump(struct nl_msg *msg, void *arg);
 };
 
 
