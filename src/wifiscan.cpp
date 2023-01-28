@@ -210,3 +210,86 @@ int WiFiScan::callback_dump(struct nl_msg *msg, void *arg)
 
     return NL_SKIP;
 }
+
+int WiFiScan::trigger_scan(struct nl_sock *socket, int if_index, int driver_id)
+{
+    // Starts the scan and waits for it to finish. Does not return until the scan is done or has been aborted.
+    struct trigger_results results;
+    results.done = 0;
+    results.aborted = 0;
+    struct nl_msg *msg;
+    struct nl_cb *cb;
+    struct nl_msg *ssids_to_scan;
+    int err;
+    int ret;
+    int mcid = nl_get_multicast_id(socket, "nl80211", "scan");
+    nl_socket_add_membership(socket, mcid);  // Without this, callback_trigger() won't be called.
+
+    // Allocate the messages and callback handler.
+    msg = nlmsg_alloc();
+    if (!msg)
+    {
+        Logger::printLog(LOG_ERROR, (char*)"Failed to allocate netlink message for msg.");
+        return -ENOMEM;
+    }
+    ssids_to_scan = nlmsg_alloc();
+    if (!ssids_to_scan)
+    {
+        Logger::printLog(LOG_ERROR, (char*)"Failed to allocate netlink message for ssids_to_scan.");
+        nlmsg_free(msg);
+        return -ENOMEM;
+    }
+    cb = nl_cb_alloc(NL_CB_DEFAULT);
+    if (!cb)
+    {
+        Logger::printLog(LOG_ERROR, (char*)"Failed to allocate netlink callbacks.");
+        nlmsg_free(msg);
+        nlmsg_free(ssids_to_scan);
+        return -ENOMEM;
+    }
+
+    // Setup the messages and callback handler.
+    genlmsg_put(msg, 0, 0, driver_id, 0, 0, NL80211_CMD_TRIGGER_SCAN, 0);  // Setup which command to run.
+    nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_index);  // Add message attribute, which interface to use.
+    nla_put(ssids_to_scan, 1, 0, "");  // Scan all SSIDs.
+    nla_put_nested(msg, NL80211_ATTR_SCAN_SSIDS, ssids_to_scan);  // Add message attribute, which SSIDs to scan for.
+    nlmsg_free(ssids_to_scan);  // Copied to `msg` above, no longer need this.
+    nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, callback_trigger, &results);  // Add the callback.
+    nl_cb_err(cb, NL_CB_CUSTOM, error_handler, &err);
+    nl_cb_set(cb, NL_CB_FINISH, NL_CB_CUSTOM, finish_handler, &err);
+    nl_cb_set(cb, NL_CB_ACK, NL_CB_CUSTOM, ack_handler, &err);
+    nl_cb_set(cb, NL_CB_SEQ_CHECK, NL_CB_CUSTOM, no_seq_check, NULL);  // No sequence checking for multicast messages.
+
+    // Send NL80211_CMD_TRIGGER_SCAN to start the scan. The kernel may reply with NL80211_CMD_NEW_SCAN_RESULTS on
+    // success or NL80211_CMD_SCAN_ABORTED if another scan was started by another process.
+    err = 1;
+    ret = nl_send_auto(socket, msg);  // Send the message.
+    printf("NL80211_CMD_TRIGGER_SCAN sent %d bytes to the kernel.\n", ret);
+    printf("Waiting for scan to complete...\n");
+    while (err > 0)
+        ret = nl_recvmsgs(socket, cb);  // First wait for ack_handler(). This helps with basic errors.
+
+    if (err < 0)
+    {
+        printf("WARNING: err has a value of %d.\n", err);
+    }
+    if (ret < 0)
+    {
+        printf("ERROR: nl_recvmsgs() returned %d (%s).\n", ret, nl_geterror(-ret));
+        return ret;
+    }
+    while (!results.done)
+        nl_recvmsgs(socket, cb);  // Now wait until the scan is done or aborted.
+    if (results.aborted)
+    {
+        printf("ERROR: Kernel aborted scan.\n");
+        return 1;
+    }
+    printf("Scan is done.\n");
+
+    // Cleanup.
+    nlmsg_free(msg);
+    nl_cb_put(cb);
+    nl_socket_drop_membership(socket, mcid);  // No longer need this.
+    return 0;
+}
