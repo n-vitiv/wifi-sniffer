@@ -22,4 +22,6 @@ int ack_handler(struct nl_msg *msg, void *arg);
 
 int no_seq_check(struct nl_msg *msg, void *arg);
 
+int callback_trigger(struct nl_msg *msg, void *arg);
+
 #endif
