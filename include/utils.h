@@ -24,4 +24,10 @@ int no_seq_check(struct nl_msg *msg, void *arg);
 
 int callback_trigger(struct nl_msg *msg, void *arg);
 
+int callback_dump(struct nl_msg *msg, void *arg);
+
+void mac_addr_n2a(char *mac_addr, unsigned char *arg);
+
+void print_ssid(unsigned char *ie, int ielen);
+
 #endif
