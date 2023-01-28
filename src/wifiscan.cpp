@@ -5,6 +5,7 @@
 #include <string.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
+#include <linux/nl80211.h>
 
 WiFiScan::WiFiScan(char* interface)
 {
@@ -161,4 +162,26 @@ void  WiFiScan::print_ssid(unsigned char *ie, int ielen)
         ielen -= ie[1] + 2;
         ie += ie[1] + 2;
     }
+}
+
+// Called by the kernel when the scan is done or has been aborted.
+int WiFiScan::callback_trigger(struct nl_msg *msg, void *arg)
+{
+    struct genlmsghdr *gnlh = (struct genlmsghdr*)nlmsg_data(nlmsg_hdr(msg));
+    struct trigger_results *results = (struct trigger_results*)arg;
+
+    if (gnlh->cmd == NL80211_CMD_SCAN_ABORTED)
+    {
+        printf("Got NL80211_CMD_SCAN_ABORTED.\n");
+        results->done = 1;
+        results->aborted = 1;
+    }
+    else if (gnlh->cmd == NL80211_CMD_NEW_SCAN_RESULTS)
+    {
+        printf("Got NL80211_CMD_NEW_SCAN_RESULTS.\n");
+        results->done = 1;
+        results->aborted = 0;
+    }  // else probably an uninteresting multicast message.
+
+    return NL_SKIP;
 }

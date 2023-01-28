@@ -23,6 +23,7 @@ private:
     int nl_get_multicast_id(struct nl_sock *sock, const char *family, const char *group);
     struct nl_sock* open_socket();
     WiFiScan();
+    int callback_trigger(struct nl_msg *msg, void *arg);
 };
 
 
