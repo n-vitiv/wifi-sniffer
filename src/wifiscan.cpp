@@ -15,6 +15,36 @@ WiFiScan::WiFiScan(char* interface)
 void WiFiScan::start_scan()
 {
     int if_index = interface_to_index(intf_name);
+    struct nl_sock* socket = open_socket();
+    int driver_id = genl_ctrl_resolve(socket, "nl80211");
+
+    int err = trigger_scan(socket, if_index, driver_id);
+    if (err != 0)
+    {
+        Logger::printLog(LOG_ERROR, (char*)"do_scan_trigger() failed with %d.", err);
+        return;
+    }
+
+    // Allocate a message.
+    struct nl_msg *msg = nlmsg_alloc();
+    // Setup which command to run.
+    genlmsg_put(msg, 0, 0, driver_id, 0, NLM_F_DUMP, NL80211_CMD_GET_SCAN, 0);
+    // Add message attribute, which interface to use.
+    nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_index);
+    // Add the callback.
+    nl_socket_modify_cb(socket, NL_CB_VALID, NL_CB_CUSTOM, callback_dump, NULL);
+    // Send the message.
+    int ret = nl_send_auto(socket, msg);
+    printf("NL80211_CMD_GET_SCAN sent %d bytes to the kernel.\n", ret);
+
+    // Retrieve the kernel's answer. callback_dump() prints SSIDs to stdout.
+    ret = nl_recvmsgs_default(socket);
+    nlmsg_free(msg);
+    if (ret < 0)
+    {
+        Logger::printLog(LOG_ERROR, (char*)"nl_recvmsgs_default() returned %d (%s).", ret, nl_geterror(-ret));
+        return;
+    }
 }
 
 int WiFiScan::interface_to_index(char* interface)
